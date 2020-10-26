@@ -3,43 +3,29 @@ __author__ = "shekkizh"
 import faiss
 import os
 import numpy as np
+import numpy.linalg as LA
 
-class BaseNeighborSearch:
-    def __init__(self, d, k, use_gpu=True):
-        self.d = d
-        self.k = k
-        self.use_gpu = use_gpu
 
-    def load(self, folder_name):
-        raise NotImplementedError
-
-    def save(self, folder_name):
-        raise NotImplementedError
-
-    def add_to_database(self, x):
-        raise NotImplementedError
-
-    def search_neighbors(self, q):
-        raise NotImplementedError
-
-    def get_neighbors(self, indices):
-        raise NotImplementedError
-
-class FaissNeighborSearch(BaseNeighborSearch):
-    def __init__(self, d, k, use_gpu=True):
+class FaissNeighborSearch:
+    def __init__(self, d, k, use_gpu=False, add_with_ids=False):
         """
         Initialize the class with the dimension of vectors
         :param k: Number of neighbors to search
         :param d: dimension of the database and query vectors
         """
-        BaseNeighborSearch.__init__(self, d, k, use_gpu)
+        self.d = d
         self.index = faiss.IndexFlatL2(self.d)
+        self.add_with_ids = add_with_ids
+        if self.add_with_ids:
+            self.index = faiss.IndexIDMap2(self.index)
+        self.use_gpu = use_gpu
         if self.use_gpu:
             os.environ['CUDA_VISIBLE_DEVICES'] = "0"
             self.convert_to_gpu()
             # self.index = faiss.GpuIndexFlatL2(res, self.d, flat_config)  # Does brute force neighbor search
 
         # self.index = faiss.IndexFlatIP(d)
+        self.k = k
 
     def convert_to_gpu(self):
         res = faiss.StandardGpuResources()
@@ -71,7 +57,16 @@ class FaissNeighborSearch(BaseNeighborSearch):
 
     def add_to_database(self, x):
         # x = x/LA.norm(x, axis=1, keepdims=True)
-        self.index.add(x=x)
+        if self.add_with_ids:
+            raise SyntaxError("Missing id argument for data to be added. Use add_to_database_with_ids(...) "
+                              "function instead or set add_with_ids flag to False at initialization")
+        self.index.add(x)
+
+    def add_to_database_with_ids(self, x, ids):
+        if not self.add_with_ids:
+            raise SyntaxError("Additional id argument for data to be added. Use add_to_database(...) "
+                              "function instead or set add_with_ids flag to True at initialization")
+        self.index.add_with_ids(x, ids)
 
     def search_neighbors(self, q):
         # q = q / LA.norm(q, axis=1, keepdims=True)
@@ -79,3 +74,6 @@ class FaissNeighborSearch(BaseNeighborSearch):
 
     def get_neighbors(self, indices):
         return np.array([self.index.reconstruct(int(ind)) for ind in indices])
+
+    def remove_neighbors(self, indices):
+        self.index.remove_ids(indices)

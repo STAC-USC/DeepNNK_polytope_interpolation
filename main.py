@@ -62,6 +62,7 @@ def main(arg=None):
         model.test()
     elif mode == "calibrate":
         model.calibrate_data()
+    elif mode == "SVM":
         model.svm_cv_calibrate()
     elif mode == "plot":
         model.plot_neighbors([2595, 3745, 374])

@@ -2,8 +2,8 @@ __author__ = "shekkizh"
 """Custom solver for solving non negative quadratic programs with positive definite matrices"""
 
 import numpy as np
+from scipy.linalg import get_lapack_funcs
 import warnings
-from scipy.linalg.decomp_cholesky import cho_factor, cho_solve
 
 
 def non_negative_qpsolver(A, b, x_init, x_tol, check_tol=-1, epsilon_low=-1, epsilon_high=-1):
@@ -24,38 +24,54 @@ def non_negative_qpsolver(A, b, x_init, x_tol, check_tol=-1, epsilon_low=-1, eps
         check_tol = x_tol
 
     n = A.shape[0]
-    np.fill_diagonal(A, 1.0)
+    # A = A + 1e-6 * np.eye(n)
     max_iter = 50 * n
     itr = 0
     # %%
     x_opt = np.reshape(x_init, (n, 1))
-    N = x_opt > (1 - epsilon_high) # Similarity too close to 1 (nodes collapse)
-    if sum(N) > 0:
-        x_opt = x_opt*N.astype(np.float)
+    N = 1.0 * (x_opt > (1 - epsilon_high))  # Similarity too close to 1 (nodes collapse)
+    if np.sum(N) > 0:
+        x_opt = x_opt * N
         return x_opt[:, 0], 0
-        # %%
-    non_pruned_elements = np.ones((n, 1), dtype=np.bool)  # F tracks elements pruned based on negativity
 
-    # remove_duplicates = np.where(np.tril(A, -1) > (1 - epsilon_high))
-    # non_pruned_elements[remove_duplicates[1]] = False
-    # import IPython; IPython.embed()
+    # %%
+    non_pruned_elements = x_opt > epsilon_low
     check = 1
-    try:
-        while (check > check_tol) and (itr < max_iter):
-            non_pruned_elements = np.logical_and(x_opt > epsilon_low, non_pruned_elements)
-            x_opt_solver = np.zeros((n, 1))
-            x_opt_solver[non_pruned_elements] = cho_solve(
-                cho_factor(A[non_pruned_elements[:, 0], :][:, non_pruned_elements[:, 0]]),
-                b[non_pruned_elements[:, 0]])
-            x_opt = x_opt_solver
-            itr = itr + 1
-            N = x_opt < epsilon_low
-            if sum(N) > 0:
-                check = np.max(np.abs(x_opt[N]))
-            else:
-                check = 0
-    except np.linalg.LinAlgError as e:
-        warnings.warn("Linalg Error: Ill conditioned matrix")
-    finally:
-        x_opt[x_opt < x_tol] = 0
-        return x_opt[:, 0], check
+
+    while (check > check_tol) and (itr < max_iter):
+        x_opt_solver = np.zeros((n, 1))
+        x_opt_solver[non_pruned_elements] = cholesky_solver(
+            A[non_pruned_elements[:, 0], :][:, non_pruned_elements[:, 0]], b[non_pruned_elements[:, 0]], tol=x_tol)
+        x_opt = x_opt_solver
+        itr = itr + 1
+        N = x_opt < epsilon_low
+        if np.sum(N) > 0:
+            check = np.max(np.abs(x_opt[N]))
+        else:
+            check = 0
+        non_pruned_elements = np.logical_and(x_opt > epsilon_low, non_pruned_elements)
+
+    x_opt[x_opt < x_tol] = 0
+    return x_opt[:, 0], check
+
+
+def cholesky_solver(a, b, tol=1e-10, lower=False, overwrite_a=False, overwrite_b=False, clean=True):
+    """Modified code from SciPy LinAlg routine"""
+
+    a1 = np.atleast_2d(a)
+    # Quick return for square empty array
+    if a1.size == 0:
+        return b
+
+    potrf, = get_lapack_funcs(('potrf',), (a1,))
+    c, info = potrf(a1, lower=lower, overwrite_a=overwrite_a, clean=clean)
+
+    if info > 0:
+        warnings.warn("Cholesky solver encountered positive semi-definite matrix -- possible duplicates in data")
+        # return solve(a1, b, assume_a='sym', lower=lower, overwrite_a=overwrite_a, overwrite_b=overwrite_b,
+        #              check_finite=False)
+        c = c + tol*np.eye(b.size)
+
+    potrs, = get_lapack_funcs(('potrs',), (c, b))
+    x, info = potrs(c, b, lower=lower, overwrite_b=overwrite_b)
+    return x

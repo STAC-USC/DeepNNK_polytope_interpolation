@@ -4,8 +4,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-# import statsmodels.api as sm
-from utils.graph_utils import non_negative_qpsolver, weighted_classifier
 import seaborn as sbn
 import json
 import matplotlib
@@ -64,9 +62,9 @@ def k_param_study(model_path, knn_values, data_type="train"):
 
 if __name__ == "__main__":
     model_paths = [
-        "logs/conv2d_models_cifar10_basic_under_parameterized",
-        "logs/conv2d_models_cifar10_basic",
-        "logs/conv2d_models_cifar10_basic_overfit"
+        "logs/conv2d_models_cifar10_layer_size_16_regularized_True", # Underparam
+        "logs/conv2d_models_cifar10_layer_size_32_regularized_True", # Regularized
+        "logs/conv2d_models_cifar10_layer_size_32_regularized_False" # Overfit
     ]
     knn_values = [25, 50, 75]
     data_type = "train"
