@@ -44,6 +44,9 @@ flags.DEFINE_integer("processing_size", 100, "Number of samples to process at a 
 # %% Calibrate related parameters
 flags.DEFINE_integer("cross_validation", 5, "cross validation fold for calibrating using linear SVM")
 
+# %% Plot related parameter
+flags.DEFINE_string("data_type", "test", "Flag to set dataset type: train/test to use")
+
 # %%
 def main(arg=None):
     session_config = None
